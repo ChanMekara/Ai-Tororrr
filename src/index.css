@@ -70,18 +70,28 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Kantumruy Pro', 'Inter', system-ui, -apple-system, 'Noto Sans Khmer', sans-serif;
+    line-height: 1.7;
+    font-feature-settings: 'locl' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Khmer text support */
+  /* Khmer-specific text rendering */
   .font-khmer {
-    font-family: 'Kantumruy Pro', 'Noto Sans Khmer', sans-serif;
-    line-height: 1.8;
+    font-family: 'Kantumruy Pro', 'Noto Sans Khmer', 'Khmer OS', sans-serif;
+    line-height: 1.9;
+    word-spacing: 0.05em;
   }
 
   .font-khmer h1, .font-khmer h2, .font-khmer h3 {
     line-height: 1.6;
     letter-spacing: 0;
+  }
+
+  /* Ensure Khmer subscript/superscript render properly */
+  @supports (font-variant-east-asian: proportional-nums) {
+    body { font-variant-east-asian: proportional-nums; }
   }
 
   /* Math monospace font */

@@ -92,6 +92,8 @@ export default function Chat() {
   const [usage, setUsage] = useState<{ plan?: string; questions_used?: number; questions_limit?: number; label?: string } | null>(null);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -141,7 +143,10 @@ export default function Chat() {
   // Poll auth session when waiting for confirmation
   useEffect(() => {
     if (!pendingSessionId || !isPolling) return;
+    setPollCount(0);
+    setPollError(null);
     const interval = setInterval(async () => {
+      setPollCount(c => c + 1);
       const result = await checkAuthSession(pendingSessionId);
       if (result?.status === 'confirmed' && result.user) {
         const confirmed = confirmAuthFromSession(result.user, result.usage);
@@ -150,12 +155,27 @@ export default function Chat() {
           setUsage(confirmed.usage as typeof usage);
           setIsPolling(false);
           setPendingSessionId(null);
+          setPollError(null);
           setShowLoginModal(false);
         }
+      } else if (result?.status === 'not_found') {
+        setPollError(settings.language === 'km'
+          ? 'Session ផុតកំណត់ ឬ មិនត្រឹមត្រូវ។ សូមព្យាយាមម្តងទៀត។'
+          : 'Session expired or invalid. Please try again.');
+        setIsPolling(false);
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [pendingSessionId, isPolling]);
+  }, [pendingSessionId, isPolling, settings.language]);
+
+  // Timeout polling after 60 seconds (20 attempts)
+  useEffect(() => {
+    if (!isPolling || pollCount < 20) return;
+    setPollError(settings.language === 'km'
+      ? 'អស់ពេលរង់ចាំ។ សូមបើកបូត ហើយចុច Start ម្តងទៀត។'
+      : 'Timed out. Please open the bot and tap Start again.');
+    setIsPolling(false);
+  }, [pollCount, isPolling, settings.language]);
 
   // Auto-scroll
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeSession?.messages]);
@@ -312,8 +332,11 @@ export default function Chat() {
   const inputBg = isDark ? 'bg-[#212121]' : 'bg-white';
   const cardHover = isDark ? 'hover:bg-[#252525]' : 'hover:bg-gray-100';
 
+  // Apply Khmer font class when language is Khmer
+  const fontClass = settings.language === 'km' ? 'font-khmer' : '';
+
   return (
-    <div className={`flex h-screen w-screen ${bg} ${textPrimary} overflow-hidden text-sm`}>
+    <div className={`flex h-screen w-screen ${bg} ${textPrimary} overflow-hidden text-sm ${fontClass}`}>
       {/* ═══ SIDEBAR ═══ */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -607,9 +630,18 @@ export default function Chat() {
               </p>
             </div>
 
+            {/* Error state */}
+            {pollError && (
+              <div className={`mb-3 p-3 rounded-xl ${isDark ? 'bg-red-500/10 border border-red-500/20' : 'bg-red-50 border border-red-200'} text-center`}>
+                <p className="text-xs text-red-400 font-medium">{pollError}</p>
+              </div>
+            )}
+
             {!isPolling ? (
               <div className="space-y-3">
                 <button onClick={() => {
+                  setPollError(null);
+                  setPollCount(0);
                   const sid = startBotLogin();
                   setPendingSessionId(sid);
                   setIsPolling(true);
@@ -634,8 +666,8 @@ export default function Chat() {
                   </p>
                   <p className={`text-[10px] ${textSecondary}`}>
                     {settings.language === 'km'
-                      ? 'សូមចុច "ភ្ជាប់គណនី" នៅក្នុងការជជែកបូត'
-                      : 'Please click "Connect Account" in the bot chat'}
+                      ? `បានរង់ចាំ ${pollCount * 3} វិនាទី... សូមចុច Start នៅក្នុងបូត`
+                      : `Waited ${pollCount * 3}s... Please tap Start in the bot`}
                   </p>
                 </div>
                 <button onClick={async () => {
@@ -648,6 +680,7 @@ export default function Chat() {
                         setUsage(confirmed.usage as typeof usage);
                         setIsPolling(false);
                         setPendingSessionId(null);
+                        setPollError(null);
                         setShowLoginModal(false);
                       }
                     }
@@ -663,6 +696,8 @@ export default function Chat() {
               setShowLoginModal(false);
               setIsPolling(false);
               setPendingSessionId(null);
+              setPollError(null);
+              setPollCount(0);
             }}
               className={`w-full mt-2 py-2 rounded-xl text-xs ${textSecondary} ${cardHover} transition-colors`}>
               {settings.language === 'km' ? 'បោះបង់' : 'Cancel'}
