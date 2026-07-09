@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    { "source": "/api/health", "destination": "/api/health.js" },
+    { "source": "/api/chat", "destination": "/api/chat.js" },
+    { "source": "/api/chat/stream", "destination": "/api/stream.js" },
+    { "source": "/api/vision", "destination": "/api/vision.js" },
+    { "source": "/api/models", "destination": "/api/models.js" },
+    { "source": "/api/auth/telegram", "destination": "/api/auth/telegram.js" },
+    { "source": "/api/auth/check", "destination": "/api/auth/check.js" },
+    { "source": "/api/bot", "destination": "/api/bot.js" },
+    { "source": "/api/usage", "destination": "/api/usage.js" },
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ]
+}
