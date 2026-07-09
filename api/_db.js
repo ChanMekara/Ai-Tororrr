@@ -1,41 +1,29 @@
-// Simple JSON-file based user database
-// Stores users with their Telegram info and plan
+// In-memory user database
+// Uses module-level storage (persists within a Vercel container, resets on cold start)
+// For production with many users, migrate to Redis or MongoDB
 
-const fs = require('fs');
-const path = require('path');
+// ═══════════════════════════════════════════
+// IN-MEMORY STORE
+// ═══════════════════════════════════════════
 
-const DB_FILE = path.join(process.cwd(), 'data', 'users.json');
-const SESSIONS_FILE = path.join(process.cwd(), 'data', 'sessions.json');
-
-// Ensure data directory exists
-const dataDir = path.dirname(DB_FILE);
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
-function readDB() {
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch { return { users: {}, sessions: {} }; }
-}
-
-function writeDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
+const memoryDB = {
+  users: {},
+  sessions: {},
+};
 
 // ═══════════════════════════════════════════
 // USER MANAGEMENT
 // ═══════════════════════════════════════════
 
 function getUser(telegramId) {
-  const db = readDB();
-  return db.users[String(telegramId)] || null;
+  return memoryDB.users[String(telegramId)] || null;
 }
 
 function createOrUpdateUser(userData) {
-  const db = readDB();
   const id = String(userData.id);
-  const existing = db.users[id] || {};
-  
-  db.users[id] = {
+  const existing = memoryDB.users[id] || {};
+
+  memoryDB.users[id] = {
     ...existing,
     id: userData.id,
     first_name: userData.first_name || existing.first_name || '',
@@ -49,18 +37,15 @@ function createOrUpdateUser(userData) {
     questions_reset_at: existing.questions_reset_at || Date.now(),
     created_at: existing.created_at || Date.now(),
   };
-  
-  writeDB(db);
-  return db.users[id];
+
+  return memoryDB.users[id];
 }
 
 function setUserPlan(telegramId, plan) {
-  const db = readDB();
   const id = String(telegramId);
-  if (!db.users[id]) return null;
-  db.users[id].plan = plan;
-  writeDB(db);
-  return db.users[id];
+  if (!memoryDB.users[id]) return null;
+  memoryDB.users[id].plan = plan;
+  return memoryDB.users[id];
 }
 
 function getPlanLimits(plan) {
@@ -77,39 +62,32 @@ function getPlanLimits(plan) {
 // ═══════════════════════════════════════════
 
 function createAuthSession(sessionId, telegramId) {
-  const db = readDB();
-  db.sessions[sessionId] = {
+  memoryDB.sessions[sessionId] = {
     telegram_id: telegramId,
     created_at: Date.now(),
-    status: 'pending', // pending → confirmed
+    status: 'pending',
   };
-  writeDB(db);
 }
 
 function confirmAuthSession(sessionId) {
-  const db = readDB();
-  if (!db.sessions[sessionId]) return null;
-  db.sessions[sessionId].status = 'confirmed';
-  db.sessions[sessionId].confirmed_at = Date.now();
-  writeDB(db);
-  return db.sessions[sessionId];
+  if (!memoryDB.sessions[sessionId]) return null;
+  memoryDB.sessions[sessionId].status = 'confirmed';
+  memoryDB.sessions[sessionId].confirmed_at = Date.now();
+  return memoryDB.sessions[sessionId];
 }
 
 function getAuthSession(sessionId) {
-  const db = readDB();
-  return db.sessions[sessionId] || null;
+  return memoryDB.sessions[sessionId] || null;
 }
 
 function cleanupOldSessions() {
-  const db = readDB();
   const now = Date.now();
   const oneHour = 60 * 60 * 1000;
-  for (const [sid, session] of Object.entries(db.sessions)) {
+  for (const [sid, session] of Object.entries(memoryDB.sessions)) {
     if (now - session.created_at > oneHour) {
-      delete db.sessions[sid];
+      delete memoryDB.sessions[sid];
     }
   }
-  writeDB(db);
 }
 
 // ═══════════════════════════════════════════
@@ -117,38 +95,34 @@ function cleanupOldSessions() {
 // ═══════════════════════════════════════════
 
 function getUsage(telegramId) {
-  const db = readDB();
-  const user = db.users[String(telegramId)];
+  const user = memoryDB.users[String(telegramId)];
   if (!user) return null;
-  
+
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   if (Date.now() - user.questions_reset_at > oneWeek) {
     user.questions_used_week = 0;
     user.questions_reset_at = Date.now();
-    writeDB(db);
   }
-  
+
   const plan = getPlanLimits(user.plan);
   return {
     plan: user.plan,
     plan_label: plan.label,
     questions_used: user.questions_used_week,
     questions_limit: plan.questions_per_week,
-    questions_remaining: plan.questions_per_week === Infinity ? '∞' : Math.max(0, plan.questions_per_week - user.questions_used_week),
+    questions_remaining: plan.questions_per_week === Infinity ? '\u221e' : Math.max(0, plan.questions_per_week - user.questions_used_week),
     can_use_claude: plan.can_use_claude,
   };
 }
 
 function incrementUsage(telegramId) {
-  const db = readDB();
-  const user = db.users[String(telegramId)];
+  const user = memoryDB.users[String(telegramId)];
   if (!user) return false;
-  
+
   const plan = getPlanLimits(user.plan);
   if (user.questions_used_week >= plan.questions_per_week) return false;
-  
+
   user.questions_used_week++;
-  writeDB(db);
   return true;
 }
 
@@ -157,8 +131,7 @@ function incrementUsage(telegramId) {
 // ═══════════════════════════════════════════
 
 function getAllUsers() {
-  const db = readDB();
-  return Object.values(db.users);
+  return Object.values(memoryDB.users);
 }
 
 const ADMIN_IDS = (process.env.ADMIN_CHAT_ID || '6401807592').split(',').map(s => s.trim());

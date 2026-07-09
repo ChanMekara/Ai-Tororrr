@@ -1,7 +1,7 @@
 // Check auth session status (polled by frontend)
 // Session is created when user clicks /start, confirmed when user clicks "Connect Account"
 
-const { getAuthSession, getUser, cleanupOldSessions, getUsage } = require('../../api/_db');
+const { getAuthSession, getUser, cleanupOldSessions, getUsage } = require('../_db');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
